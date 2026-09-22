@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+MUJOCO_LOG.TXT
+
+# Session output: recorded videos, the per-tick diagnostic CSVs, logs, and
+# the supervisor's stop-file. Nothing here is needed to run the cell.
+out/

@@ -1,0 +1,263 @@
+<mujoco>
+  <include file="cameras.xml"/>
+
+  <!--
+    Coordinate layout: UR5e base sits at world origin (see ur5e_robotiq.xml).
+    Shared floor plane (declared in scene_real.xml) doubles as the tabletop
+    - z=0 is both "floor" and "table surface" (no separate table CAD).
+
+    Manifold: static body, corner-origin local frame matching manifold.obj's
+    own convention (min corner at local 0,0,0) - so local coordinates here
+    match the port positions directly (x=57.5/102.5/147.5/192.5mm,
+    y=25mm, z=50mm top face).
+
+    QD tray: there is no tray model, so the QDs stand upright directly on
+    the shared floor in a 2x2 cluster. They are mocap bodies (see below), so
+    they cannot tip over.
+  -->
+
+  <default>
+    <default class="qd">
+      <default class="qd_visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="2" material="mat_qd"/>
+      </default>
+      <default class="qd_collision">
+        <geom type="cylinder" group="3"/>
+      </default>
+    </default>
+    <default class="manifold">
+      <!-- group="1", not "2" - see manifold_visual_geom_pretty below for
+           why: this geom needs to be HIDDEN for the third-person camera
+           specifically, and group 2 also holds the entire arm/gripper, so
+           hiding group 2 there would make the whole robot disappear from
+           the video. group 1 is unused by anything else and still enabled
+           by MuJoCo's own default geomgroup, just like group 2 - zero
+           effect on vision or any other render that doesn't explicitly
+           touch it. -->
+      <default class="manifold_visual">
+        <geom type="mesh" contype="0" conaffinity="0" group="1" material="mat_manifold"/>
+      </default>
+      <default class="manifold_collision">
+        <geom type="box" group="3"/>
+      </default>
+    </default>
+  </default>
+
+  <asset>
+    <mesh name="qd_visual" file="parts/QD.stl"/>
+    <mesh name="manifold_visual" file="parts/manifold.obj"/>
+    <!-- Colors chosen both for how the scene reads on camera and for the
+         live dashboard's wrist-cam view, where the QD and manifold need to
+         be easy to tell apart at a glance (a grey manifold, e.g.
+         0.55/0.57/0.6, renders nearly WHITE under this scene's lighting,
+         almost the same brightness as the QDs themselves). mat_qd is
+         bright and near-achromatic on purpose -
+         qd_sim/vision/shape_detector.py's detect_hexagons() mask is
+         chroma<20 & gray>150, tuned specifically to separate a near-white
+         QD from the floor; it is only slightly warm (chroma ~15,
+         comfortably under 20; gray ~205, comfortably over 150 - 4/4 hex
+         detections).
+
+         mat_manifold: a warm tan. It can't be much darker: a dark
+         bronze/graphite (0.35/0.24/0.16) costs the port detector the
+         contrast it needs, and the port detector runs over this surface -
+         so if this material is changed, re-verify port detection at every
+         tracking height. -->
+    <!-- specular="0" shininess="0" reflectance="0" - a matte, not glossy,
+         look. detect_hexagons()'s chroma/brightness-based mask gives the
+         same 4/4 detections with pixel centroids identical to well under a
+         pixel, so it is unaffected by specular highlights. -->
+    <material name="mat_qd" rgba="0.82 0.80 0.76 1" specular="0" shininess="0" reflectance="0"/>
+    <material name="mat_manifold" rgba="0.62 0.53 0.42 1"/>
+    <!-- Cosmetic-only, third-person-camera-only manifold color - a darker,
+         richer look than the vision-facing mat_manifold (see
+         manifold_visual_geom_pretty below for why this is a SEPARATE geom,
+         not a change to mat_manifold itself). The vision-facing color has
+         to stay as it is (see mat_manifold above), so the darker look
+         lives on a separate geom only the third-person camera shows. This
+         value is safe to be as dark and rich as looks good, precisely
+         because vision never sees it.
+
+         specular="0" shininess="0" reflectance="0" - MuJoCo's own defaults
+         for an unspecified material are specular=0.5/shininess=0.5, which
+         combined with this scene's two directional lights produce an
+         intense glare/hotspot streak across the manifold's top face from
+         some viewing angles, not a flat/matte look. Matte is safe here for
+         the same reason the color itself is - this geom is never seen by
+         vision, only the third-person camera/recorded video.
+
+         The base color is very dark (0.15/0.08/0.04) because specular=0
+         alone doesn't stop the top face looking washed out: it sits almost
+         directly under an overhead downward-pointing light
+         (scene_real.xml), so even a purely matte/diffuse surface there is
+         at close to peak illumination (Lambertian brightness peaks when a
+         surface directly faces its light) and looks glowing regardless of
+         shininess. A darker base color still reads as a rich, matte dark
+         bronze/wood tone even under that direct top-down light.
+
+         emission="1" makes the material effectively self-lit at its own
+         rgba, dominating over the directional-light-dependent Lambertian
+         shading, so the manifold shows the SAME color from every side and
+         angle rather than a lighter top and darker sides. Safe for the
+         same reason as above - this geom is never seen by vision. -->
+    <material name="mat_manifold_pretty" rgba="0.15 0.08 0.04 1" specular="0" shininess="0" reflectance="0" emission="1"/>
+  </asset>
+
+  <worldbody>
+    <!-- Framed on the tray+manifold workspace.
+
+         Defined with an explicit xyaxes, computed as a standard look-at
+         basis (viewing target point, local Y built from a cross product
+         against world +Z), so the horizon renders level. pos+zaxis alone
+         would leave the roll around the viewing axis to MuJoCo's own
+         arbitrary default, which comes out ~90deg off level here (floor
+         grid lines running diagonally across the frame).
+
+         The distance along the look-at ray is a balance: far enough back
+         that the arm's upper joints stay in frame at the tallest pose used
+         mid-session (TRAY_HOVER_Z=0.50), not just at the ready pose; close
+         enough that the arm renders large without excess empty floor
+         between the camera and the manifold. The aim point sits near the
+         arm's own mid-height rather than the tray/floor. -->
+    <camera name="third_person_cam" class="scene_cam" pos="1.77 -0.236 0.88" xyaxes="0.161489 0.986875 -0.000000 -0.333339 0.054546 0.941228"/>
+
+    <!--
+      ==================== Manifold (static, 4 ports) ====================
+      Collision is built from box primitives, not 1: a solid base block
+      (z 0-24mm) plus an open top layer (z 24-50mm) with ONE continuous gap
+      across all 4 ports (x=30-220mm, full 0-50mm width in y), not per-port
+      slots with dividers/margins between them. A single solid box across
+      the full 0-50mm height doesn't work - it leaves no cavity for the
+      QD's thread to descend into at all.
+
+      Why one big gap instead of a tighter per-port slot: the grasp needs a
+      40deg yaw to align with the QD's hex flats,
+      so the gripper's pads approach each port at that same yaw, not
+      straight down its own axis - their footprint doesn't fit inside a
+      slot only sized for a non-rotated approach. Narrower openings (a
+      40mm-per-port slot, or one merged gap with a 3mm y-margin) still
+      let the gripper clip the manifold in a window just a couple mm wide
+      partway through the descent - small enough to look survivable on
+      paper, but enough to destabilize the grip completely (a QD tracking a
+      stable pose derails to a random ~100deg tilt immediately after).
+      Dividers and margins aren't load-bearing for anything - the base
+      block below still provides the real seating support at every x,y -
+      so leaving them out closes the problem instead of chasing exact
+      clearance numbers for a specific gripper yaw that could easily
+      change later. The base block's top sits at 24mm, giving a
+      comfortable margin below the 12mm engagement depth without depending
+      on hitting an exact number (at 36mm, only 2mm of clearance, the
+      thread tip stops short of full seating).
+
+      Engagement depth (50mm manifold top minus where the thread tip lands)
+      is 12.0mm. The QD's hex flange is a sharp step at 34.9mm, and the
+      ribbed region above the flange (43-54.9mm in the QD's own frame) is
+      the real thread that goes into the
+      manifold, not the smooth shaft below the flange. Engagement depth =
+      54.9 - 42.9 = 12.0mm (flange's thread-side face to the tip). The QD's
+      <body> orientation and its collision geoms below both follow from
+      this.
+    -->
+    <body name="manifold" pos="0.40 0.15 0">
+      <geom name="manifold_visual_geom" class="manifold_visual" mesh="manifold_visual"/>
+      <!-- Same mesh as manifold_visual_geom above, offset 0.3mm up in Z
+           (pos below) - a purely cosmetic overlay for the third-person
+           camera/recorded video only (see mat_manifold_pretty's own
+           comment for why this can't just replace mat_manifold outright).
+
+           group="5" is hidden by MuJoCo's own default geomgroup, as it is
+           for the one small gripper/pinch site that otherwise uses this
+           group (see ur5e_robotiq.xml) - so by default this geom is
+           invisible everywhere, including every vision-facing render
+           (detect_qds(), detect_ports() and render_wrist_cam() in
+           qd_cell/session.py all use unmodified default scene options) -
+           group 5 stays off, so vision only ever sees the
+           mat_manifold-colored geom above, completely unaffected by this
+           one).
+
+           The third-person camera's own render calls (see
+           qd_cell/constants.py's THIRD_PERSON_SCENE_OPTION) show group 5
+           (this geom) AND hide group 1 (manifold_visual_geom, the
+           vision-safe color) - group 1 exists specifically so this swap
+           can hide ONLY the manifold's safe-color geom, not the arm too.
+
+           Hiding the geom via its group, rather than trying to cover it,
+           is what makes this work from every angle. Offsetting this geom
+           0.3mm up in Z over the same footprint covers the TOP face (its
+           normal points the same way as the offset) but not the SIDE faces
+           (whose normals point sideways, not up), so slivers of the
+           vision-safe material would still show through on the sides.
+           Group hiding has no geometry to line up and no offset math that
+           only works from one direction. -->
+      <geom name="manifold_visual_geom_pretty" type="mesh" contype="0" conaffinity="0"
+            group="5" mesh="manifold_visual" material="mat_manifold_pretty"/>
+
+      <geom name="manifold_col_base" class="manifold_collision" size="0.125 0.025 0.012" pos="0.125 0.025 0.012"/>
+      <geom name="manifold_col_top_left_end" class="manifold_collision" size="0.015 0.025 0.013" pos="0.015 0.025 0.037"/>
+      <geom name="manifold_col_top_right_end" class="manifold_collision" size="0.015 0.025 0.013" pos="0.235 0.025 0.037"/>
+
+      <site name="port_1_site" pos="0.0575 0.025 0.050" group="4" size="0.003"/>
+      <site name="port_2_site" pos="0.1025 0.025 0.050" group="4" size="0.003"/>
+      <site name="port_3_site" pos="0.1475 0.025 0.050" group="4" size="0.003"/>
+      <site name="port_4_site" pos="0.1925 0.025 0.050" group="4" size="0.003"/>
+    </body>
+
+    <!--
+      QD collision stack per QD, in the MESH's own local frame (z=0 at the
+      smooth shaft's far end, z=54.9mm at the true thread tip):
+        far end  z  0-34.9mm  cylinder r=8.12mm  (smooth shaft, unused by this task -
+                                                    not gripped or inserted, just carried)
+        flange   z 34.9-42.9mm cylinder r=15.6mm (sharp step to ~31mm dia - the grasp
+                                                    point AND the seating shoulder that
+                                                    bottoms out on the manifold's outer
+                                                    face; too wide to enter the ~22mm bore)
+        thread   z 42.9-54.9mm cylinder r=10.6mm (the real thread - goes into the
+                                                    manifold; engagement depth 12.0mm)
+      Each QD <body> below applies quat="0 1 0 0" (180deg flip about X) so the
+      thread tip points DOWN and the smooth far end points UP - the mesh's own
+      z=0 is NOT "down" by default.
+      Body pos.z=0.0559 follows from the flip: the tip (mesh z=54.9mm) sits
+      54.9mm BELOW the body origin, so resting it ~1mm above the floor takes
+      origin_z = 0.0549 + 0.001.
+
+      Each QD is a mocap body (no <freejoint/>, no mass/inertia) rather than
+      a grasp simulated through contact physics: friction/mass/inertia on a
+      body this light, gripped by a small pad contact patch, gives a
+      genuinely unstable grip that isn't fully reliable at every grasp
+      height however it's tuned. A mocap body can't be pushed, dropped, or
+      spun loose by contact forces at all - qd_sim/tasks/kinematic_weld.py
+      drives its pose directly (a real rigid weld to the gripper once
+      grasped, not a simulated hold) once the session engages it at grasp.
+      Collision geoms are kept (not disabled) purely so the gripper still
+      visually stops at the QD's real surface while closing, before the
+      weld takes over - that contact doesn't bear any actual holding load.
+    -->
+    <body name="qd_1" pos="0.42 -0.23 0.0559" quat="0 1 0 0" mocap="true">
+      <geom name="qd_1_visual" class="qd_visual" mesh="qd_visual"/>
+      <geom name="qd_1_col_far" class="qd_collision" size="0.00812 0.01745" pos="0 0 0.01745"/>
+      <geom name="qd_1_col_flange" class="qd_collision" size="0.0156 0.004" pos="0 0 0.0389"/>
+      <geom name="qd_1_col_thread" class="qd_collision" size="0.0106 0.006" pos="0 0 0.0489"/>
+    </body>
+
+    <body name="qd_2" pos="0.48 -0.23 0.0559" quat="0 1 0 0" mocap="true">
+      <geom name="qd_2_visual" class="qd_visual" mesh="qd_visual"/>
+      <geom name="qd_2_col_far" class="qd_collision" size="0.00812 0.01745" pos="0 0 0.01745"/>
+      <geom name="qd_2_col_flange" class="qd_collision" size="0.0156 0.004" pos="0 0 0.0389"/>
+      <geom name="qd_2_col_thread" class="qd_collision" size="0.0106 0.006" pos="0 0 0.0489"/>
+    </body>
+
+    <body name="qd_3" pos="0.42 -0.17 0.0559" quat="0 1 0 0" mocap="true">
+      <geom name="qd_3_visual" class="qd_visual" mesh="qd_visual"/>
+      <geom name="qd_3_col_far" class="qd_collision" size="0.00812 0.01745" pos="0 0 0.01745"/>
+      <geom name="qd_3_col_flange" class="qd_collision" size="0.0156 0.004" pos="0 0 0.0389"/>
+      <geom name="qd_3_col_thread" class="qd_collision" size="0.0106 0.006" pos="0 0 0.0489"/>
+    </body>
+
+    <body name="qd_4" pos="0.48 -0.17 0.0559" quat="0 1 0 0" mocap="true">
+      <geom name="qd_4_visual" class="qd_visual" mesh="qd_visual"/>
+      <geom name="qd_4_col_far" class="qd_collision" size="0.00812 0.01745" pos="0 0 0.01745"/>
+      <geom name="qd_4_col_flange" class="qd_collision" size="0.0156 0.004" pos="0 0 0.0389"/>
+      <geom name="qd_4_col_thread" class="qd_collision" size="0.0106 0.006" pos="0 0 0.0489"/>
+    </body>
+  </worldbody>
+</mujoco>

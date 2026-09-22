@@ -1,0 +1,11 @@
+<mujoco>
+  <!-- Shared default class for fixed (non-body-mounted) scene cameras. The
+       wrist camera is mounted on the gripper's wrist link in
+       ur5e_robotiq.xml, so it moves with the arm and doesn't use this
+       class. -->
+  <default>
+    <default class="scene_cam">
+      <camera fovy="45"/>
+    </default>
+  </default>
+</mujoco>

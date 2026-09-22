@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QD Manifold Assembly Cell</title>
+<link rel="stylesheet" href="hmi.css">
+</head>
+<body>
+<div class="chassis">
+
+  <header class="titlebar">
+    <div class="cellname">QD Manifold Assembly Cell</div>
+    <!-- Comms as two small indicators rather than a diagram: an operator
+         needs to know whether the numbers below are live, not how the
+         network is wired. Dark means what is on screen is stale. -->
+    <div class="comms">
+      <span class="dot" id="dot-plc"></span><span class="dotlabel">PLC</span>
+      <span class="dot" id="dot-sim"></span><span class="dotlabel">Robot</span>
+    </div>
+    <div class="statepill" id="statepill">----</div>
+  </header>
+
+  <div class="columns">
+
+    <!-- ===================== ASSEMBLY ===================== -->
+    <section class="job" id="job-assembly">
+      <div class="jobhead">
+        <h2>Assembly</h2>
+        <span class="jobstate" id="asm-state">Idle</span>
+      </div>
+      <div class="count"><b id="asm-done">0</b><span>of 4 QDs installed</span></div>
+      <div class="track"><div class="track-fill" id="asm-bar"></div></div>
+      <ol class="steps" id="asm-steps"></ol>
+      <div class="jobbtns">
+        <button class="pb start" id="asm-start">Start</button>
+        <button class="pb stop"  id="asm-stop">Stop</button>
+      </div>
+    </section>
+
+    <!-- ===================== LEAK TEST ==================== -->
+    <section class="job" id="job-leak">
+      <div class="jobhead">
+        <h2>Leak test</h2>
+        <span class="jobstate" id="leak-state">Idle</span>
+      </div>
+      <div class="count"><b id="leak-done">0</b><span>of 4 ports tested</span></div>
+      <div class="track"><div class="track-fill" id="leak-bar"></div></div>
+      <ol class="steps" id="leak-steps"></ol>
+      <div class="jobbtns">
+        <button class="pb start" id="leak-start">Start</button>
+        <button class="pb stop"  id="leak-stop">Stop</button>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="footer">
+    <div class="alarm" id="alarm"><b>Alarm</b><span id="alarm-text">&mdash; none &mdash;</span></div>
+    <button class="pb reset" id="btn-reset">Reset</button>
+  </div>
+
+</div>
+<script src="hmi.js"></script>
+</body>
+</html>

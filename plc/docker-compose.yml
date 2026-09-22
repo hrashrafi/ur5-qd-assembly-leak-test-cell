@@ -1,0 +1,33 @@
+# The cell PLC.
+#
+# Two roles at once, which is the whole point of the architecture:
+#   - Modbus SLAVE on :502   - the operator panel polls this (Map B)
+#   - Modbus MASTER          - it polls the robot controller at
+#                              host.docker.internal:5020 (Map A)
+#
+# The sim runs on the host, not in a container, because it needs the Mac's GPU
+# for rendering. host.docker.internal is how this container reaches it; the
+# sim must bind 0.0.0.0, not 127.0.0.1, or the connection is refused and
+# OpenPLC simply reports the slave device offline with no further explanation.
+
+services:
+  openplc:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: qd_cell_plc
+    # Fixed, so the Settings page's hostname field has a stable value to
+    # compare against and does not try to change it on every save.
+    hostname: openplc
+    ports:
+      - "8080:8080"     # web UI
+      - "502:502"       # Modbus TCP server, for the HMI
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 40s

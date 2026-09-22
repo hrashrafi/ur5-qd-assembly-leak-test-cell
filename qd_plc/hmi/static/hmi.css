@@ -1,0 +1,210 @@
+/* Operator panel styling.
+
+   A modern control-room screen rather than a moulded plastic panel: dark
+   surfaces, one accent colour per machine state, generous spacing, tabular
+   numerals. The visual language is Ignition Perspective / Grafana, not a
+   1990s PanelView - but the discipline is the same, which is that colour
+   means exactly one thing. Green is running, amber is waiting, red is
+   faulted, blue is finished, and nothing decorative is allowed to use them. */
+
+:root {
+  --bg:        #0c0e13;
+  --surface:   #151922;
+  --surface-2: #1c222d;
+  --line:      #29313f;
+  --line-soft: #202632;
+
+  --text:      #e7ebf2;
+  --text-dim:  #8791a3;
+  --text-mute: #5d6779;
+
+  --green:     #34d399;
+  --green-bg:  rgba(52, 211, 153, .12);
+  --amber:     #fbbf24;
+  --amber-bg:  rgba(251, 191, 36, .12);
+  --rose:      #fb7185;
+  --rose-bg:   rgba(251, 113, 133, .12);
+  --sky:       #38bdf8;
+  --sky-bg:    rgba(56, 189, 248, .12);
+
+  --radius:    12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1100px 620px at 50% -12%, #18202c 0%, transparent 62%),
+    var(--bg);
+  font-family: "Inter", ui-sans-serif, system-ui, -apple-system,
+               "Segoe UI", Roboto, sans-serif;
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "tnum" 1;
+}
+
+.chassis {
+  max-width: 940px;
+  margin: 0 auto;
+  padding: 34px 20px 48px;
+}
+
+/* ---------- title bar ---------- */
+.titlebar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 4px 20px;
+}
+.cellname {
+  flex: 1;
+  font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--text);
+}
+.statepill {
+  font-size: 12.5px; font-weight: 700; letter-spacing: .13em;
+  padding: 8px 20px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-mute);
+  border: 1px solid var(--line); min-width: 130px; text-align: center;
+  transition: color .2s, background .2s, border-color .2s;
+}
+.statepill.run   { background: var(--green-bg); color: var(--green); border-color: rgba(52,211,153,.35); }
+.statepill.hold  { background: var(--amber-bg); color: var(--amber); border-color: rgba(251,191,36,.35); }
+.statepill.done  { background: var(--sky-bg);   color: var(--sky);   border-color: rgba(56,189,248,.35); }
+.statepill.fault {
+  background: var(--rose-bg); color: var(--rose); border-color: rgba(251,113,133,.40);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: .5; } }
+
+/* ---------- comms indicators ---------- */
+.comms { display: flex; align-items: center; gap: 7px; }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--line); transition: background .25s, box-shadow .25s;
+}
+.dot.on { background: var(--green); box-shadow: 0 0 9px rgba(52,211,153,.6); }
+.dotlabel {
+  font-size: 11px; color: var(--text-mute); margin-right: 8px;
+}
+
+/* ---------- the two jobs ---------- */
+.columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+.job {
+  display: flex; flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 18px 20px 18px;
+  transition: border-color .25s;
+}
+.job.live { border-color: rgba(52, 211, 153, .3); }
+
+.jobhead { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+.jobhead h2 {
+  flex: 1; margin: 0;
+  font-size: 15px; font-weight: 600; letter-spacing: -.01em; color: var(--text);
+}
+.jobstate {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .1em;
+  text-transform: uppercase; padding: 5px 11px; border-radius: 999px;
+  background: var(--surface-2); color: var(--text-mute);
+  border: 1px solid var(--line);
+}
+.jobstate.run   { background: var(--green-bg); color: var(--green); border-color: rgba(52,211,153,.35); }
+.jobstate.hold  { background: var(--amber-bg); color: var(--amber); border-color: rgba(251,191,36,.35); }
+.jobstate.done  { background: var(--sky-bg);   color: var(--sky);   border-color: rgba(56,189,248,.35); }
+.jobstate.fault { background: var(--rose-bg);  color: var(--rose);  border-color: rgba(251,113,133,.35); }
+
+.count { display: flex; align-items: baseline; gap: 9px; }
+.count b { font-size: 34px; font-weight: 600; letter-spacing: -.02em; }
+.count span { font-size: 12.5px; color: var(--text-dim); }
+
+.track {
+  height: 4px; margin: 12px 0 18px; border-radius: 3px;
+  background: var(--surface-2); overflow: hidden;
+}
+.track-fill {
+  height: 100%; width: 0; border-radius: 3px;
+  background: var(--green); transition: width .35s ease;
+}
+
+/* ---------- step lists ---------- */
+.steps { list-style: none; margin: 0 0 18px; padding: 0; flex: 1; }
+.steps li {
+  position: relative;
+  display: flex; align-items: center; gap: 13px;
+  padding: 8px 0 8px 3px; font-size: 13.5px;
+  color: var(--text-mute); transition: color .2s;
+}
+.steps li:not(:last-child)::after {
+  content: ""; position: absolute; left: 8px; top: 26px; bottom: -4px;
+  width: 1px; background: var(--line);
+}
+.steps li::before {
+  content: ""; flex: none; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--surface-2); border: 1.5px solid var(--line);
+  transition: background .2s, border-color .2s, box-shadow .2s;
+}
+.steps li.done { color: var(--text-dim); }
+.steps li.done::before { background: var(--text-mute); border-color: var(--text-mute); }
+.steps li.active { color: var(--text); font-weight: 600; }
+.steps li.active::before {
+  background: var(--green); border-color: var(--green);
+  box-shadow: 0 0 0 4px var(--green-bg);
+}
+
+/* ---------- buttons ---------- */
+.jobbtns { display: flex; gap: 9px; }
+.pb {
+  font: inherit; font-size: 13px; font-weight: 600; letter-spacing: .02em;
+  padding: 12px 20px; cursor: pointer;
+  border-radius: 9px; border: 1px solid transparent;
+  transition: transform .06s, filter .15s, opacity .15s;
+}
+.pb:hover:not(:disabled) { filter: brightness(1.12); }
+.pb:active:not(:disabled) { transform: translateY(1px); }
+.pb:disabled {
+  opacity: .25; cursor: not-allowed; box-shadow: none;
+  filter: grayscale(1);
+}
+.jobbtns .pb { flex: 1; }
+.pb.start { background: var(--green); color: #052e21; }
+.pb.stop  { background: var(--surface-2); color: var(--rose); border-color: rgba(251,113,133,.3); }
+/* Reset has to read as available at a glance. A dim grey button on a dark
+   panel is indistinguishable from a disabled one, and the disabled style
+   below is only an opacity change - so an operator would conclude the
+   button does not work, when it does. Enabled is clearly lit. */
+.pb.reset {
+  background: var(--surface-2); color: var(--text);
+  border-color: var(--text-mute); min-width: 104px;
+}
+.pb.reset:hover:not(:disabled) {
+  background: var(--line); border-color: var(--text-dim);
+}
+
+/* ---------- footer: alarm + reset ---------- */
+.footer { display: flex; align-items: stretch; gap: 10px; margin-top: 14px; }
+.alarm {
+  flex: 1;
+  display: flex; align-items: center; gap: 16px;
+  padding: 15px 18px; font-size: 13.5px;
+  background: var(--surface); color: var(--text-mute);
+  border: 1px solid var(--line-soft); border-radius: var(--radius);
+  transition: background .2s, color .2s, border-color .2s;
+}
+.alarm b {
+  font-size: 10px; font-weight: 700; letter-spacing: .15em;
+  text-transform: uppercase; color: var(--text-mute);
+}
+.alarm.active {
+  background: var(--rose-bg); color: #ffd7dd;
+  border-color: rgba(251, 113, 133, .35);
+}
+.alarm.active b { color: var(--rose); }
+
+@media (max-width: 760px) {
+  .chassis { padding: 22px 14px 32px; }
+  .columns { grid-template-columns: 1fr; }
+  .footer { flex-direction: column; }
+}

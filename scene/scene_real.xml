@@ -1,0 +1,124 @@
+<mujoco model="qd_manifold_scene">
+  <include file="ur5e_robotiq.xml"/>
+  <include file="world.xml"/>
+  <include file="leak_arm.xml"/>
+
+  <statistic center="0.4 0 0.3" extent="1.2"/>
+
+  <visual>
+    <!-- EXPOSURE. Every light in the scene points essentially straight
+         down, so a horizontal top face collects headlight ambient +
+         headlight diffuse + the near-vertical lights together. At MuJoCo's
+         default intensities (headlight ambient 0.3 + diffuse 0.6, lights at
+         0.7 each) that is ~3.0x illumination: multiply either albedo by it
+         and the manifold (mat_manifold 0.62/0.53/0.42) and the QDs (mat_qd
+         0.82/0.80/0.76 - world.xml) both clip to pure 255 white - 66% of
+         the center of the top-down camera view saturates, with the
+         manifold and every QD merged into one white blob and only the
+         ports' dark crescents still visible. The blue table (0.2/0.3/0.4)
+         survives it, which makes the problem look specific to the manifold.
+
+         The fix is lower exposure, NOT flattened lighting - a scene-wide
+         flat/ambient-only look is not realistic. The key/fill split and
+         their different directions stay, so shading and shape-reading
+         survive; there's simply less total light. Tuned by measurement,
+         not by eye: with the QD flange at ~223 and the manifold face at
+         ~158 (a 65-level separation, nothing clipped) both read as their
+         own real color from directly overhead.
+
+         Both detectors that run under this lighting still work: the pick
+         arm's detect_hexagons() over the tray and detect_holes() over the
+         manifold both find exactly 4, at every height across their full
+         tracking descent (0.50->0.28 and 0.30->0.20 respectively). The
+         leak-test detector is unaffected by construction - it renders
+         through leak_test_sequence._flat_lit_render(), which overrides
+         lighting for its own frame regardless of what's set here. -->
+    <headlight diffuse="0.25 0.25 0.25" ambient="0.22 0.22 0.22" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="120" elevation="-20" offwidth="1920" offheight="1440"/>
+    <quality shadowsize="4096" offsamples="8"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <!-- reflectance=0 - floor reflections add ghost/duplicate silhouettes
+         near real objects in wrist-cam renders, corrupting the shape
+         detectors' contours (qd_sim/vision/shape_detector.py) right where
+         it matters most, close up. -->
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0"/>
+  </asset>
+
+  <worldbody>
+    <!-- castshadow="false" (MuJoCo's default is true) - the arm's own
+         shadow can fall across a nearby QD in some wrist-cam hover poses,
+         corrupting that QD's detected contour (the shape detectors'
+         shape/circularity checks fail exactly where the shadow overlaps
+         it). -->
+    <!-- diffuse/specular set explicitly rather than MuJoCo's defaults
+         (0.7 diffuse / 0.3 specular) - see the <visual> block's exposure
+         comment above. Key light straight down, fill from the side.
+         specular="0 0 0" because mat_manifold doesn't set its own specular
+         and so inherits MuJoCo's 0.5 default - under four lights that is a
+         real part of the blowout, and this scene is deliberately matte
+         anyway (see world.xml's material comments). -->
+    <light pos="0 0 2" dir="0 0 -1" directional="true" castshadow="false"
+      diffuse="0.42 0.42 0.42" specular="0 0 0"/>
+    <light pos="0.5 -0.3 1.5" dir="0 0.2 -0.8" directional="true" castshadow="false"
+      diffuse="0.24 0.24 0.24" specular="0 0 0"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane"/>
+  </worldbody>
+
+  <!--
+    The QDs are mocap bodies (see world.xml), not freejoint bodies, so
+    they don't occupy any qpos slots at all - MuJoCo initializes their
+    pose straight from each qd_N <body pos=... quat=...> in world.xml on
+    every reset, with no keyframe entry needed. That leaves this file's
+    total qpos identical to ur5e_robotiq.xml's own 15 (6 arm joints, the
+    screw_adapter joint, and 8 gripper joints) PLUS leak_arm.xml's own 6 (a
+    second UR5e's arm joints, with no gripper or screw adapter of its own),
+    so this "ready" keyframe is that same arm/gripper pose plus a parked
+    pose for the leak-test arm, under one name - the name qd_sim/env.py's
+    SimEnv loads by default.
+
+    The leak arm's own first 5 values (of its 6, last 6 of qpos/ctrl below)
+    reuse the exact same joint angles as the pick arm's own ready pose - not
+    because the two arms need to look identical, but because those angles
+    already produce a safe "elbow bent, tool hanging straight down, no
+    self-collision" configuration for a bare UR5e at rest, and the leak
+    arm's base (at world 0.525, 0.9, 0) is far enough from the pick arm's
+    that the same pose parks it clear of the pick arm and manifold
+    workspace. With both arms together in this scene, full sessions report
+    0 self-collision and 0 leak-arm contacts.
+
+    The 6th value - leak/wrist_3_joint - does NOT reuse the pick arm's own
+    0rad. With the probe mounted coaxial with this joint's own rotation
+    axis, wrist_3 rotating barely moves the probe/camera at all visually
+    (the probe tip's rendered position is nearly identical at wrist_3=0deg
+    and 90deg) EXCEPT for the leak_cam housing, mounted off-axis for a real
+    view of the tool tip - that housing sweeps a real ~150mm arc as
+    wrist_3 turns, swinging behind the wrist_2/wrist_3 joint's own opaque
+    housing from the recording camera's viewpoint partway through (normal
+    3D occlusion, not a geometry clash). At 0rad, every port's inspection
+    would start with wrist_3 sweeping nearly the joint's FULL range (0 to
+    the ~166-179deg each port actually uses) just to reach its operating
+    angle - harmless, but it reads as the camera swinging into the joint
+    at the start of every inspection. Setting the ready pose's own wrist_3
+    to 3.0107rad (172.5deg - the midpoint of that 166-179deg operating
+    range) means every port's actual first move only needs a few degrees,
+    not ~170, so the housing's own swing-through-occlusion mostly happens
+    once while genuinely parked (much less conspicuous) rather than
+    visibly at the start of each inspection.
+
+    IMPORTANT: this keyframe's qpos/ctrl length must match the model's
+    nq/nu exactly - MuJoCo refuses to load a mismatched keyframe outright -
+    so any change to either arm's own joint/actuator count needs a
+    matching update here.
+  -->
+  <keyframe>
+    <key name="ready"
+      qpos="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0 0 0 0 0 0 0 0 0 0 -1.5708 -1.5708 1.5708 -1.5708 -1.5708 3.0107"
+      ctrl="-1.5708 -1.5708 1.5708 -1.5708 -1.5708 0 0 0 -1.5708 -1.5708 1.5708 -1.5708 -1.5708 3.0107"/>
+  </keyframe>
+</mujoco>
